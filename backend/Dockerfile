@@ -1,5 +1,5 @@
 # STEP 1: Build the Elixir Release
-FROM hexpm/elixir:1.15.7-erlang-26.1.2-debian-bookworm-slim AS build
+FROM elixir:1.15.7-slim AS build
 
 # install build dependencies
 RUN apt-get update -y && apt-get install -y build-essential git \
