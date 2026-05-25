@@ -52,7 +52,8 @@ defmodule Canopy.MixProject do
       {:bcrypt_elixir, "~> 3.0"},
       {:cors_plug, "~> 3.0"},
       {:req, "~> 0.5"},
-      {:quantum, "~> 3.5"}
+      {:quantum, "~> 3.5"},
+      {:jose, "1.11.10", override: true}
     ]
   end
 

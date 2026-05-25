@@ -42,7 +42,14 @@ defmodule Canopy.IssueDispatcher do
 
   @impl true
   def init(_opts) do
-    workspace_ids = Repo.all(from w in Workspace, select: w.id)
+    workspace_ids =
+      try do
+        Repo.all(from w in Workspace, select: w.id)
+      rescue
+        error ->
+          Logger.error("[IssueDispatcher] Failed to load workspace IDs from database on boot: #{inspect(error)}")
+          []
+      end
 
     for ws_id <- workspace_ids do
       Canopy.EventBus.subscribe(Canopy.EventBus.workspace_topic(ws_id))

@@ -432,95 +432,101 @@ defmodule Canopy.BudgetEnforcer do
   end
 
   defp load_current_month_costs do
-    today = Date.utc_today()
-    month_start = DateTime.new!(Date.new!(today.year, today.month, 1), ~T[00:00:00], "Etc/UTC")
+    try do
+      today = Date.utc_today()
+      month_start = DateTime.new!(Date.new!(today.year, today.month, 1), ~T[00:00:00], "Etc/UTC")
 
-    # Load agent-level costs
-    Repo.all(
-      from ce in CostEvent,
-        where: ce.inserted_at >= ^month_start,
-        group_by: ce.agent_id,
-        select: {ce.agent_id, sum(ce.cost_cents)}
-    )
-    |> Enum.each(fn {agent_id, total} ->
-      :ets.insert(@table, {{"agent", agent_id}, total})
-    end)
+      # Load agent-level costs
+      Repo.all(
+        from ce in CostEvent,
+          where: ce.inserted_at >= ^month_start,
+          group_by: ce.agent_id,
+          select: {ce.agent_id, sum(ce.cost_cents)}
+      )
+      |> Enum.each(fn {agent_id, total} ->
+        :ets.insert(@table, {{"agent", agent_id}, total})
+      end)
 
-    # Load workspace-level costs (aggregate via agents)
-    Repo.all(
-      from ce in CostEvent,
-        join: a in Agent,
-        on: ce.agent_id == a.id,
-        where: ce.inserted_at >= ^month_start and not is_nil(a.workspace_id),
-        group_by: a.workspace_id,
-        select: {a.workspace_id, sum(ce.cost_cents)}
-    )
-    |> Enum.each(fn {workspace_id, total} ->
-      :ets.insert(@table, {{"workspace", workspace_id}, total})
-    end)
+      # Load workspace-level costs (aggregate via agents)
+      Repo.all(
+        from ce in CostEvent,
+          join: a in Agent,
+          on: ce.agent_id == a.id,
+          where: ce.inserted_at >= ^month_start and not is_nil(a.workspace_id),
+          group_by: a.workspace_id,
+          select: {a.workspace_id, sum(ce.cost_cents)}
+      )
+      |> Enum.each(fn {workspace_id, total} ->
+        :ets.insert(@table, {{"workspace", workspace_id}, total})
+      end)
 
-    # Load team-level costs (aggregate via team_memberships)
-    Repo.all(
-      from ce in CostEvent,
-        join: tm in TeamMembership,
-        on: ce.agent_id == tm.agent_id,
-        where: ce.inserted_at >= ^month_start,
-        group_by: tm.team_id,
-        select: {tm.team_id, sum(ce.cost_cents)}
-    )
-    |> Enum.each(fn {team_id, total} ->
-      :ets.insert(@table, {{"team", team_id}, total})
-    end)
+      # Load team-level costs (aggregate via team_memberships)
+      Repo.all(
+        from ce in CostEvent,
+          join: tm in TeamMembership,
+          on: ce.agent_id == tm.agent_id,
+          where: ce.inserted_at >= ^month_start,
+          group_by: tm.team_id,
+          select: {tm.team_id, sum(ce.cost_cents)}
+      )
+      |> Enum.each(fn {team_id, total} ->
+        :ets.insert(@table, {{"team", team_id}, total})
+      end)
 
-    # Load department-level costs
-    Repo.all(
-      from ce in CostEvent,
-        join: tm in TeamMembership,
-        on: ce.agent_id == tm.agent_id,
-        join: t in Team,
-        on: tm.team_id == t.id,
-        where: ce.inserted_at >= ^month_start,
-        group_by: t.department_id,
-        select: {t.department_id, sum(ce.cost_cents)}
-    )
-    |> Enum.each(fn {dept_id, total} ->
-      :ets.insert(@table, {{"department", dept_id}, total})
-    end)
+      # Load department-level costs
+      Repo.all(
+        from ce in CostEvent,
+          join: tm in TeamMembership,
+          on: ce.agent_id == tm.agent_id,
+          join: t in Team,
+          on: tm.team_id == t.id,
+          where: ce.inserted_at >= ^month_start,
+          group_by: t.department_id,
+          select: {t.department_id, sum(ce.cost_cents)}
+      )
+      |> Enum.each(fn {dept_id, total} ->
+        :ets.insert(@table, {{"department", dept_id}, total})
+      end)
 
-    # Load division-level costs
-    Repo.all(
-      from ce in CostEvent,
-        join: tm in TeamMembership,
-        on: ce.agent_id == tm.agent_id,
-        join: t in Team,
-        on: tm.team_id == t.id,
-        join: d in Department,
-        on: t.department_id == d.id,
-        where: ce.inserted_at >= ^month_start,
-        group_by: d.division_id,
-        select: {d.division_id, sum(ce.cost_cents)}
-    )
-    |> Enum.each(fn {div_id, total} ->
-      :ets.insert(@table, {{"division", div_id}, total})
-    end)
+      # Load division-level costs
+      Repo.all(
+        from ce in CostEvent,
+          join: tm in TeamMembership,
+          on: ce.agent_id == tm.agent_id,
+          join: t in Team,
+          on: tm.team_id == t.id,
+          join: d in Department,
+          on: t.department_id == d.id,
+          where: ce.inserted_at >= ^month_start,
+          group_by: d.division_id,
+          select: {d.division_id, sum(ce.cost_cents)}
+      )
+      |> Enum.each(fn {div_id, total} ->
+        :ets.insert(@table, {{"division", div_id}, total})
+      end)
 
-    # Load organization-level costs
-    Repo.all(
-      from ce in CostEvent,
-        join: tm in TeamMembership,
-        on: ce.agent_id == tm.agent_id,
-        join: t in Team,
-        on: tm.team_id == t.id,
-        join: d in Department,
-        on: t.department_id == d.id,
-        join: div in Division,
-        on: d.division_id == div.id,
-        where: ce.inserted_at >= ^month_start,
-        group_by: div.organization_id,
-        select: {div.organization_id, sum(ce.cost_cents)}
-    )
-    |> Enum.each(fn {org_id, total} ->
-      :ets.insert(@table, {{"organization", org_id}, total})
-    end)
+      # Load organization-level costs
+      Repo.all(
+        from ce in CostEvent,
+          join: tm in TeamMembership,
+          on: ce.agent_id == tm.agent_id,
+          join: t in Team,
+          on: tm.team_id == t.id,
+          join: d in Department,
+          on: t.department_id == d.id,
+          join: div in Division,
+          on: d.division_id == div.id,
+          where: ce.inserted_at >= ^month_start,
+          group_by: div.organization_id,
+          select: {div.organization_id, sum(ce.cost_cents)}
+      )
+      |> Enum.each(fn {org_id, total} ->
+        :ets.insert(@table, {{"organization", org_id}, total})
+      end)
+    rescue
+      error ->
+        Logger.error("[BudgetEnforcer] Failed to load current month costs from database on boot: #{inspect(error)}")
+        :ok
+    end
   end
 end

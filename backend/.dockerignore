@@ -1,0 +1,9 @@
+# Backends/build dependencies
+_build
+deps
+.elixir_ls
+.git
+.gitignore
+*.log
+.env
+.env.local

@@ -15,18 +15,24 @@ defmodule Canopy.Scheduler do
 
   @doc "Load all enabled schedules from DB and register as Quantum jobs."
   def load_schedules do
-    schedules =
-      Repo.all(
-        from s in Schedule,
-          where: s.enabled == true,
-          preload: [:agent]
-      )
+    try do
+      schedules =
+        Repo.all(
+          from s in Schedule,
+            where: s.enabled == true,
+            preload: [:agent]
+        )
 
-    for schedule <- schedules do
-      add_schedule(schedule)
+      for schedule <- schedules do
+        add_schedule(schedule)
+      end
+
+      Logger.info("[Scheduler] Loaded #{length(schedules)} schedules from database")
+    rescue
+      error ->
+        Logger.error("[Scheduler] Failed to load schedules from database on boot: #{inspect(error)}")
+        :ok
     end
-
-    Logger.info("[Scheduler] Loaded #{length(schedules)} schedules from database")
   end
 
   @doc "Add or update a schedule as a Quantum job."
