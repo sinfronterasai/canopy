@@ -6,7 +6,7 @@ defmodule CanopyWeb.OrganizationController do
   import Ecto.Query
 
   def index(conn, params) do
-    user_id = params["user_id"] || conn.assigns[:current_user_id]
+    user_id = params["user_id"] || (conn.assigns[:current_user] && conn.assigns[:current_user].id)
 
     query =
       if user_id do
@@ -23,7 +23,7 @@ defmodule CanopyWeb.OrganizationController do
   end
 
   def create(conn, params) do
-    user_id = params["created_by"] || conn.assigns[:current_user_id]
+    user_id = params["created_by"] || (conn.assigns[:current_user] && conn.assigns[:current_user].id)
     changeset = Organization.changeset(%Organization{}, params)
 
     case Repo.insert(changeset) do

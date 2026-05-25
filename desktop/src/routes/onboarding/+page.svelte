@@ -204,23 +204,19 @@
 
         const { workspaceStore } = await import('$lib/stores/workspace.svelte');
 
-        // If registration already created a backend workspace, reuse its ID so
-        // the frontend store entry matches what the backend knows about.  Fall
-        // back to a new UUID only for offline / mock installs.
-        const wsId = registeredWorkspaceId || crypto.randomUUID();
-        const wsEntry = {
-          id: wsId,
-          path: workspacePath,
-          name: workspaceName,
-          description: workspaceDesc,
-          addedAt: new Date().toISOString(),
-        };
-        workspaceStore.addWorkspace(wsEntry);
-        await workspaceStore.setActiveWorkspace(wsEntry.id);
+        let wsEntry: any = null;
 
-        // Best-effort: update the workspace record in the backend so the path
-        // and description (set during onboarding) are persisted server-side.
         if (registeredWorkspaceId) {
+          wsEntry = {
+            id: registeredWorkspaceId,
+            path: workspacePath,
+            name: workspaceName,
+            description: workspaceDesc,
+            addedAt: new Date().toISOString(),
+          };
+          workspaceStore.addWorkspace(wsEntry);
+          await workspaceStore.setActiveWorkspace(wsEntry.id);
+
           try {
             const { workspaces } = await import('$api/client');
             await workspaces.update(registeredWorkspaceId, {
@@ -229,8 +225,20 @@
               description: workspaceDesc || undefined,
             });
           } catch {
-            // Non-fatal: the backend workspace was created during registration;
-            // failing to update it just means the path/desc won't sync.
+            // Non-fatal
+          }
+        } else {
+          wsEntry = await workspaceStore.createWorkspace(workspaceName, workspacePath);
+          if (wsEntry) {
+            await workspaceStore.setActiveWorkspace(wsEntry.id);
+            try {
+              const { workspaces } = await import('$api/client');
+              await workspaces.update(wsEntry.id, {
+                description: workspaceDesc || undefined,
+              });
+            } catch {
+              // Non-fatal
+            }
           }
         }
       }
@@ -239,7 +247,12 @@
       try {
         const { organizations } = await import('$api/client');
         const { organizationsStore } = await import('$lib/stores/organizations.svelte');
-        const org = await organizations.create({ name: workspaceName || 'My Organization' });
+        const orgName = workspaceName || 'My Organization';
+        const orgSlug = orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+        const org = await organizations.create({
+          name: orgName,
+          slug: orgSlug || 'my-organization'
+        });
         if (org) organizationsStore.setCurrent(org);
       } catch (e) {
         console.warn('Org creation skipped:', e);

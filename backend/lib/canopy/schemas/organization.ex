@@ -28,6 +28,8 @@ defmodule Canopy.Schemas.Organization do
   end
 
   def changeset(organization, attrs) do
+    attrs = maybe_generate_slug(attrs)
+
     organization
     |> cast(attrs, [
       :name,
@@ -47,5 +49,31 @@ defmodule Canopy.Schemas.Organization do
     |> validate_format(:slug, ~r/^[a-z0-9-]+$/)
     |> validate_inclusion(:budget_enforcement, ~w(visibility warning stop))
     |> unique_constraint(:slug)
+  end
+
+  defp maybe_generate_slug(attrs) do
+    case attrs do
+      %{"name" => name, "slug" => slug} when is_binary(name) and (is_nil(slug) or slug == "") ->
+        Map.put(attrs, "slug", slugify(name))
+
+      %{"name" => name} = map when is_binary(name) ->
+        Map.put_new(map, "slug", slugify(name))
+
+      %{name: name, slug: slug} when is_binary(name) and (is_nil(slug) or slug == "") ->
+        Map.put(attrs, :slug, slugify(name))
+
+      %{name: name} = map when is_binary(name) ->
+        Map.put_new(map, :slug, slugify(name))
+
+      _ ->
+        attrs
+    end
+  end
+
+  defp slugify(name) do
+    name
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9]+/, "-")
+    |> String.trim("-")
   end
 end

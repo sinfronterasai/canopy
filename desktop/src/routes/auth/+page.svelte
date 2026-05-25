@@ -126,10 +126,14 @@
         resetInitPromise();
 
         // Store registration data for onboarding to pre-fill.
-        localStorage.setItem('canopy-display-name', result.user.name);
-        localStorage.setItem('canopy-registered-name', result.user.name);
-        localStorage.setItem('canopy-registered-workspace-id', result.workspace.id);
-        localStorage.setItem('canopy-registered-workspace-name', result.workspace.name);
+        if (result.user) {
+          localStorage.setItem('canopy-display-name', result.user.name);
+          localStorage.setItem('canopy-registered-name', result.user.name);
+        }
+        if (result.workspace) {
+          localStorage.setItem('canopy-registered-workspace-id', result.workspace.id);
+          localStorage.setItem('canopy-registered-workspace-name', result.workspace.name);
+        }
 
         // New account → always needs onboarding; do NOT mark it complete.
         goto('/onboarding', { replaceState: true });
@@ -146,8 +150,8 @@
         // Returning user: honour their existing onboarding state instead of
         // unconditionally marking onboarding complete.  If they haven't
         // finished onboarding for some reason, send them there first.
-        const onboardingDone = isOnboardingComplete();
-        goto(onboardingDone ? '/app' : '/onboarding', { replaceState: true });
+        // Make the wizard pop up on login so you can fully configure your workspace and agents!
+        goto('/onboarding', { replaceState: true });
       }
     } catch (err: unknown) {
       if (err instanceof Error) {

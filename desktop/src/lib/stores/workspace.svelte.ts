@@ -186,6 +186,39 @@ class WorkspaceStore {
     const { agentsStore } = await import("./agents.svelte");
 
     const agents = scan.agents.map(canopyDefToAgent);
+
+    // If not in mock mode, register missing agents in the backend database!
+    if (!isMockEnabled()) {
+      try {
+        const { agents: agentsApi } = await import("$api/client");
+        // Get currently registered backend agents
+        const wsId = this.activeWorkspaceId;
+        const backendAgents = await agentsApi.list(wsId ?? undefined);
+        const backendIds = new Set(backendAgents.map(a => a.id));
+
+        for (const agent of agents) {
+          if (!backendIds.has(agent.id)) {
+            console.log(`Syncing agent ${agent.name} to cloud database...`);
+            await agentsApi.create({
+              id: agent.id,
+              name: agent.name,
+              display_name: agent.display_name,
+              slug: agent.name.toLowerCase().replace(/\s+/g, "-"),
+              avatar_emoji: agent.avatar_emoji,
+              role: agent.role,
+              adapter: agent.adapter,
+              model: agent.model || undefined,
+              skills: agent.skills,
+              system_prompt: agent.system_prompt || undefined,
+              workspace_id: wsId ?? undefined,
+            } as any);
+          }
+        }
+      } catch (err) {
+        console.warn("Backend agent sync failed:", err);
+      }
+    }
+
     // Merge scanned agents with existing, deduplicating by ID (API record wins)
     agentsStore.agents = [
       ...new Map(

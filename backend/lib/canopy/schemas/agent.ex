@@ -34,8 +34,11 @@ defmodule Canopy.Schemas.Agent do
   end
 
   def changeset(agent, attrs) do
+    attrs = maybe_generate_slug(attrs)
+
     agent
     |> cast(attrs, [
+      :id,
       :slug,
       :name,
       :role,
@@ -60,5 +63,31 @@ defmodule Canopy.Schemas.Agent do
       ~w(osa claude-code codex bash http openclaw cursor gemini aider jido-claw windsurf)
     )
     |> unique_constraint([:workspace_id, :slug])
+  end
+
+  defp maybe_generate_slug(attrs) do
+    case attrs do
+      %{"name" => name, "slug" => slug} when is_binary(name) and (is_nil(slug) or slug == "") ->
+        Map.put(attrs, "slug", slugify(name))
+
+      %{"name" => name} = map when is_binary(name) ->
+        Map.put_new(map, "slug", slugify(name))
+
+      %{name: name, slug: slug} when is_binary(name) and (is_nil(slug) or slug == "") ->
+        Map.put(attrs, :slug, slugify(name))
+
+      %{name: name} = map when is_binary(name) ->
+        Map.put_new(map, :slug, slugify(name))
+
+      _ ->
+        attrs
+    end
+  end
+
+  defp slugify(name) do
+    name
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9]+/, "-")
+    |> String.trim("-")
   end
 end
