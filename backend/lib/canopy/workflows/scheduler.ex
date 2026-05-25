@@ -107,15 +107,21 @@ defmodule Canopy.Workflows.Scheduler do
   # ── Private ───────────────────────────────────────────────────────────────────
 
   defp load_all_schedules(state) do
-    workflows =
-      Repo.all(
-        from w in Workflow,
-          where: w.trigger_type == "schedule" and w.status == "active"
-      )
+    try do
+      workflows =
+        Repo.all(
+          from w in Workflow,
+            where: w.trigger_type == "schedule" and w.status == "active"
+        )
 
-    Logger.info("[Workflows.Scheduler] Loading #{length(workflows)} scheduled workflows")
+      Logger.info("[Workflows.Scheduler] Loading #{length(workflows)} scheduled workflows")
 
-    Enum.reduce(workflows, state, &schedule_workflow/2)
+      Enum.reduce(workflows, state, &schedule_workflow/2)
+    rescue
+      error ->
+        Logger.error("[Workflows.Scheduler] Failed to load scheduled workflows from database: #{inspect(error)}")
+        state
+    end
   end
 
   defp schedule_workflow(%Workflow{} = workflow, state) do
