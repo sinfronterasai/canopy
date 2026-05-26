@@ -336,12 +336,30 @@ async function _doInitializeAuth(): Promise<void> {
     }
   }
 
-  // 4. If we have a token, verify it is still valid
+  // 4. If we have a token, verify it is still valid; try refresh if expired
   if (_token) {
     const valid = await verifyToken(_token);
     if (valid) {
       resolveAuthGate();
       return;
+    }
+    // Token invalid/expired — try to refresh before giving up
+    try {
+      const res = await fetch(`${BASE_URL}${API_PREFIX}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${_token}`, 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (res.ok) {
+        const data = await res.json() as { token: string };
+        _token = data.token;
+        await saveTokenToStore(data.token);
+        try { localStorage.setItem('canopy-auth-token', data.token); } catch { /* non-fatal */ }
+        resolveAuthGate();
+        return;
+      }
+    } catch {
+      // Refresh failed — fall through to re-login
     }
     _token = null;
   }

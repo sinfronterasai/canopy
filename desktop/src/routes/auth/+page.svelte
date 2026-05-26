@@ -147,11 +147,14 @@
 
         localStorage.setItem('canopy-display-name', result.user.name);
 
-        // Returning user: honour their existing onboarding state instead of
-        // unconditionally marking onboarding complete.  If they haven't
-        // finished onboarding for some reason, send them there first.
-        // Make the wizard pop up on login so you can fully configure your workspace and agents!
-        goto('/onboarding', { replaceState: true });
+        // Returning user: they already completed onboarding during registration.
+        // Mark onboarding complete so the /app guard doesn't redirect them back.
+        localStorage.setItem('canopy-onboarding-complete', 'true');
+        localStorage.setItem('canopy-onboarding', JSON.stringify({ completed: true }));
+
+        // Go directly to the app — workspace, agents and org already exist in the
+        // backend from their initial onboarding session.
+        goto('/app', { replaceState: true });
       }
     } catch (err: unknown) {
       if (err instanceof Error) {

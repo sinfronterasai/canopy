@@ -160,15 +160,20 @@ import Sidebar from '$lib/components/layout/Sidebar.svelte';
 
       // 9. Pre-fetch projects so goals and other project-dependent pages work
       void projectsStore.fetchProjects(wsId);
-      if (ws) {
+
+      if (ws && isTauri()) {
+        // Desktop: scan filesystem first, then sync missing agents from API
         workspaceStore.scanAndLoadAgents(ws.path).then(() => {
           workspaceStore.watchActive();
-          // If scan didn't load any agents (browser mode / empty scan), fall back to API
+          // If scan didn't load any agents (empty scan), fall back to API
           if (agentsStore.agents.length === 0) {
             void agentsStore.fetchAgents(wsId);
           }
         });
       } else {
+        // Browser/web: always fetch from backend API.
+        // Fetch without workspace_id first to get ALL user agents, then
+        // refetch scoped to the active workspace if we have one.
         void agentsStore.fetchAgents(wsId);
       }
     });

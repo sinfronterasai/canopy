@@ -73,18 +73,18 @@
 
   const TEMPLATE_AGENTS: Record<TeamTemplate, AgentTemplateData[]> = {
     solo: [
-      { id: 'main-agent', name: 'Main Agent', emoji: 'bot', role: 'engineer', adapter: 'osa', skills: ['code', 'debug', 'test'], system_prompt: 'You are a skilled software engineer...' },
+      { id: crypto.randomUUID(), name: 'Main Agent', emoji: 'bot', role: 'engineer', adapter: 'osa', skills: ['code', 'debug', 'test'], system_prompt: 'You are a skilled software engineer...' },
     ],
     'dev-team': [
-      { id: 'orchestrator',    name: 'Orchestrator',    emoji: 'brain',  role: 'orchestrator', adapter: 'osa', skills: ['delegate', 'plan'],      system_prompt: 'You coordinate a development team...' },
-      { id: 'code-worker',     name: 'Code Worker',     emoji: 'code',   role: 'developer',    adapter: 'osa', skills: ['code', 'debug'],          system_prompt: 'You are a focused code implementation specialist...' },
-      { id: 'research-worker', name: 'Research Worker', emoji: 'search', role: 'researcher',   adapter: 'osa', skills: ['web_search', 'analyze'],  system_prompt: 'You research solutions, APIs, and best practices...' },
-      { id: 'qa-agent',        name: 'QA Agent',        emoji: 'shield', role: 'engineer',     adapter: 'osa', skills: ['test', 'validate'],       system_prompt: 'You ensure code quality through testing...' },
+      { id: crypto.randomUUID(), name: 'Orchestrator',    emoji: 'brain',  role: 'orchestrator', adapter: 'osa', skills: ['delegate', 'plan'],      system_prompt: 'You coordinate a development team...' },
+      { id: crypto.randomUUID(), name: 'Code Worker',     emoji: 'code',   role: 'developer',    adapter: 'osa', skills: ['code', 'debug'],          system_prompt: 'You are a focused code implementation specialist...' },
+      { id: crypto.randomUUID(), name: 'Research Worker', emoji: 'search', role: 'researcher',   adapter: 'osa', skills: ['web_search', 'analyze'],  system_prompt: 'You research solutions, APIs, and best practices...' },
+      { id: crypto.randomUUID(), name: 'QA Agent',        emoji: 'shield', role: 'engineer',     adapter: 'osa', skills: ['test', 'validate'],       system_prompt: 'You ensure code quality through testing...' },
     ],
     research: [
-      { id: 'lead-researcher', name: 'Lead Researcher', emoji: 'search', role: 'researcher', adapter: 'osa', skills: ['web_search', 'analyze', 'summarize'], system_prompt: 'You lead research investigations...' },
-      { id: 'data-analyst',    name: 'Data Analyst',    emoji: 'chart',  role: 'researcher', adapter: 'osa', skills: ['analyze', 'visualize'],              system_prompt: 'You analyze data and produce insights...' },
-      { id: 'writer',          name: 'Writer',          emoji: 'pen',    role: 'writer',     adapter: 'osa', skills: ['write', 'edit', 'format'],            system_prompt: 'You produce clear, well-structured written content...' },
+      { id: crypto.randomUUID(), name: 'Lead Researcher', emoji: 'search', role: 'researcher', adapter: 'osa', skills: ['web_search', 'analyze', 'summarize'], system_prompt: 'You lead research investigations...' },
+      { id: crypto.randomUUID(), name: 'Data Analyst',    emoji: 'chart',  role: 'researcher', adapter: 'osa', skills: ['analyze', 'visualize'],              system_prompt: 'You analyze data and produce insights...' },
+      { id: crypto.randomUUID(), name: 'Writer',          emoji: 'pen',    role: 'writer',     adapter: 'osa', skills: ['write', 'edit', 'format'],            system_prompt: 'You produce clear, well-structured written content...' },
     ],
     custom: [],
   };
@@ -251,26 +251,33 @@
         if (wsId && !isMockEnabled()) {
           try {
             const { agents: agentsApi } = await import('$api/client');
-            // Get currently registered backend agents
+            // Get currently registered backend agents for this workspace
             const backendAgents = await agentsApi.list(wsId);
-            const backendIds = new Set(backendAgents.map(a => a.id));
+            // Check by slug (name-derived) to avoid duplicates even if IDs differ
+            const backendSlugs = new Set(
+              backendAgents.map(a => (a.name ?? '').toLowerCase().replace(/\s+/g, '-'))
+            );
 
             for (const a of TEMPLATE_AGENTS[teamTemplate]) {
-              if (!backendIds.has(a.id)) {
+              const slug = a.name.toLowerCase().replace(/\s+/g, '-');
+              if (!backendSlugs.has(slug)) {
                 console.log(`Onboarding: Seeding agent ${a.name} to cloud database...`);
-                await agentsApi.create({
-                  id: a.id,
-                  name: a.name,
-                  display_name: a.name,
-                  slug: a.name.toLowerCase().replace(/\s+/g, '-'),
-                  workspace_id: wsId,
-                  avatar_emoji: a.emoji,
-                  role: a.role,
-                  adapter: a.adapter as any,
-                  model: a.model || 'claude-3-5-sonnet-latest',
-                  skills: a.skills,
-                  system_prompt: a.system_prompt || undefined,
-                });
+                try {
+                  await agentsApi.create({
+                    name: a.name,
+                    display_name: a.name,
+                    slug,
+                    workspace_id: wsId,
+                    avatar_emoji: a.emoji,
+                    role: a.role,
+                    adapter: a.adapter as any,
+                    model: a.model || 'claude-3-5-sonnet-latest',
+                    skills: a.skills,
+                    system_prompt: a.system_prompt || undefined,
+                  });
+                } catch (agentErr) {
+                  console.warn(`Failed to seed agent ${a.name}:`, agentErr);
+                }
               }
             }
           } catch (e) {

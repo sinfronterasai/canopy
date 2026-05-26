@@ -11,7 +11,7 @@ defmodule CanopyWeb.AuthController do
     cond do
       user && Bcrypt.verify_pass(password, user.password_hash) ->
         {:ok, token, _claims} =
-          Canopy.Guardian.encode_and_sign(user, %{"role" => user.role}, ttl: {1, :hour})
+          Canopy.Guardian.encode_and_sign(user, %{"role" => user.role}, ttl: {30, :day})
 
         Repo.update!(
           Ecto.Changeset.change(user,
@@ -52,7 +52,7 @@ defmodule CanopyWeb.AuthController do
     case Repo.insert(changeset) do
       {:ok, user} ->
         {:ok, token, _claims} =
-          Canopy.Guardian.encode_and_sign(user, %{"role" => user.role}, ttl: {1, :hour})
+          Canopy.Guardian.encode_and_sign(user, %{"role" => user.role}, ttl: {30, :day})
 
         conn
         |> put_status(201)

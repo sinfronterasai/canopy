@@ -6,9 +6,12 @@ defmodule CanopyWeb.WorkspaceController do
   import Ecto.Query
 
   def index(conn, _params) do
+    user = conn.assigns[:current_user]
+
     workspaces =
       Repo.all(
         from w in Workspace,
+          where: w.owner_id == ^user.id,
           order_by: [desc: w.inserted_at]
       )
 
