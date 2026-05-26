@@ -574,7 +574,8 @@ async function doFetch<T>(
   };
   if (_token) headers["Authorization"] = `Bearer ${_token}`;
 
-  const response = await fetch(url, { ...options, headers });
+  const signal = options.signal ?? AbortSignal.timeout(20_000);
+  const response = await fetch(url, { ...options, headers, signal });
 
   if (response.status === 401 && !retried && _token) {
     // Token expired — for now just clear it

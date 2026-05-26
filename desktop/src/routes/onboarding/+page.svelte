@@ -177,173 +177,184 @@
     isLaunching = true;
     syncToStore();
 
-    try {
-      const { workspaceStore, resolveHomePath } = await import('$lib/stores/workspace.svelte');
-      const resolvedWorkspacePath = await resolveHomePath(workspacePath);
-
-      let wsEntry: any = null;
-
-      if (resolvedWorkspacePath.trim()) {
-        if (isTauri()) {
-          const { invoke } = await import('@tauri-apps/api/core');
-          const agents = TEMPLATE_AGENTS[teamTemplate].map(a => ({
-            id: a.id,
-            name: a.name,
-            emoji: a.emoji,
-            role: a.role,
-            adapter: a.adapter,
-            model: a.model ?? null,
-            skills: a.skills,
-            system_prompt: a.system_prompt ?? null,
-          }));
-
-          try {
-            await invoke('scaffold_canopy_dir', {
-              path: resolvedWorkspacePath,
-              name: workspaceName,
-              description: workspaceDesc || null,
-              agents,
-            });
-          } catch (e) {
-            console.warn('Scaffold warning:', e);
-          }
+    // Hard deadline: no matter what, navigate to /app within 20 s.
+    // This prevents any hanging API call from locking the launcher forever.
+    const deadline = new Promise<void>((resolve) =>
+      setTimeout(() => {
+        console.warn('Launch deadline hit – navigating to /app anyway');
+        onboardingStore.complete();
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('canopy-onboarding-complete', 'true');
+          localStorage.setItem('canopy-onboarding', JSON.stringify({ completed: true }));
         }
+        resolve();
+      }, 20_000),
+    );
 
-        if (registeredWorkspaceId) {
-          wsEntry = {
-            id: registeredWorkspaceId,
-            path: resolvedWorkspacePath,
-            name: workspaceName,
-            description: workspaceDesc,
-            addedAt: new Date().toISOString(),
-          };
-          workspaceStore.addWorkspace(wsEntry);
-          await workspaceStore.setActiveWorkspace(wsEntry.id);
+    const work = (async () => {
+      try {
+        const { workspaceStore, resolveHomePath } = await import('$lib/stores/workspace.svelte');
+        const resolvedWorkspacePath = await resolveHomePath(workspacePath);
 
-          try {
-            const { workspaces } = await import('$api/client');
-            await workspaces.update(registeredWorkspaceId, {
-              name: workspaceName,
-              path: resolvedWorkspacePath,
-              description: workspaceDesc || undefined,
-            });
-          } catch {
-            // Non-fatal
+        let wsEntry: any = null;
+
+        if (resolvedWorkspacePath.trim()) {
+          if (isTauri()) {
+            const { invoke } = await import('@tauri-apps/api/core');
+            const agents = TEMPLATE_AGENTS[teamTemplate].map(a => ({
+              id: a.id,
+              name: a.name,
+              emoji: a.emoji,
+              role: a.role,
+              adapter: a.adapter,
+              model: a.model ?? null,
+              skills: a.skills,
+              system_prompt: a.system_prompt ?? null,
+            }));
+
+            try {
+              await invoke('scaffold_canopy_dir', {
+                path: resolvedWorkspacePath,
+                name: workspaceName,
+                description: workspaceDesc || null,
+                agents,
+              });
+            } catch (e) {
+              console.warn('Scaffold warning:', e);
+            }
           }
-        } else {
-          wsEntry = await workspaceStore.createWorkspace(workspaceName, resolvedWorkspacePath);
-          if (wsEntry) {
+
+          if (registeredWorkspaceId) {
+            wsEntry = {
+              id: registeredWorkspaceId,
+              path: resolvedWorkspacePath,
+              name: workspaceName,
+              description: workspaceDesc,
+              addedAt: new Date().toISOString(),
+            };
+            workspaceStore.addWorkspace(wsEntry);
             await workspaceStore.setActiveWorkspace(wsEntry.id);
+
             try {
               const { workspaces } = await import('$api/client');
-              await workspaces.update(wsEntry.id, {
+              await workspaces.update(registeredWorkspaceId, {
+                name: workspaceName,
+                path: resolvedWorkspacePath,
                 description: workspaceDesc || undefined,
               });
             } catch {
               // Non-fatal
             }
-          }
-        }
-
-        // --- Seed Default Template Agents directly to Backend Postgres Database ---
-        const wsId = wsEntry?.id || registeredWorkspaceId;
-        const { isMockEnabled } = await import('$api/client');
-        if (wsId && !isMockEnabled()) {
-          try {
-            const { agents: agentsApi } = await import('$api/client');
-            // Get currently registered backend agents for this workspace
-            const backendAgents = await agentsApi.list(wsId);
-            // Check by slug (name-derived) to avoid duplicates even if IDs differ
-            const backendSlugs = new Set(
-              backendAgents.map(a => (a.name ?? '').toLowerCase().replace(/\s+/g, '-'))
-            );
-
-            for (const a of TEMPLATE_AGENTS[teamTemplate]) {
-              const slug = a.name.toLowerCase().replace(/\s+/g, '-');
-              if (!backendSlugs.has(slug)) {
-                console.log(`Onboarding: Seeding agent ${a.name} to cloud database...`);
-                try {
-                  await agentsApi.create({
-                    name: a.name,
-                    display_name: a.name,
-                    slug,
-                    workspace_id: wsId,
-                    avatar_emoji: a.emoji,
-                    role: a.role,
-                    adapter: a.adapter as any,
-                    model: a.model || 'claude-3-5-sonnet-latest',
-                    skills: a.skills,
-                    system_prompt: a.system_prompt || undefined,
-                  });
-                } catch (agentErr) {
-                  console.warn(`Failed to seed agent ${a.name}:`, agentErr);
-                }
+          } else {
+            wsEntry = await workspaceStore.createWorkspace(workspaceName, resolvedWorkspacePath);
+            if (wsEntry) {
+              await workspaceStore.setActiveWorkspace(wsEntry.id);
+              try {
+                const { workspaces } = await import('$api/client');
+                await workspaces.update(wsEntry.id, {
+                  description: workspaceDesc || undefined,
+                });
+              } catch {
+                // Non-fatal
               }
             }
-          } catch (e) {
-            console.warn('Backend agent seeding failed:', e);
+          }
+
+          // --- Seed Default Template Agents directly to Backend Postgres Database ---
+          const wsId = wsEntry?.id || registeredWorkspaceId;
+          const { isMockEnabled } = await import('$api/client');
+          if (wsId && !isMockEnabled()) {
+            try {
+              const { agents: agentsApi } = await import('$api/client');
+              // Get currently registered backend agents for this workspace
+              const backendAgents = await agentsApi.list(wsId);
+              // Check by slug (name-derived) to avoid duplicates even if IDs differ
+              const backendSlugs = new Set(
+                backendAgents.map(a => (a.name ?? '').toLowerCase().replace(/\s+/g, '-'))
+              );
+
+              for (const a of TEMPLATE_AGENTS[teamTemplate]) {
+                const slug = a.name.toLowerCase().replace(/\s+/g, '-');
+                if (!backendSlugs.has(slug)) {
+                  console.log(`Onboarding: Seeding agent ${a.name} to cloud database...`);
+                  try {
+                    await agentsApi.create({
+                      name: a.name,
+                      display_name: a.name,
+                      slug,
+                      workspace_id: wsId,
+                      avatar_emoji: a.emoji,
+                      role: a.role,
+                      adapter: a.adapter as any,
+                      model: a.model || 'claude-3-5-sonnet-latest',
+                      skills: a.skills,
+                      system_prompt: a.system_prompt || undefined,
+                    });
+                  } catch (agentErr) {
+                    console.warn(`Failed to seed agent ${a.name}:`, agentErr);
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn('Backend agent seeding failed:', e);
+            }
           }
         }
-      }
 
-      // Create a default Organization for the hierarchy system
-      try {
-        const { organizations } = await import('$api/client');
-        const { organizationsStore } = await import('$lib/stores/organizations.svelte');
-        const orgName = workspaceName || 'My Organization';
-        const orgSlug = orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-        const org = await organizations.create({
-          name: orgName,
-          slug: orgSlug || 'my-organization'
-        });
-        if (org) organizationsStore.setCurrent(org);
-      } catch (e) {
-        console.warn('Org creation skipped:', e);
-      }
-
-      onboardingStore.complete();
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('canopy-onboarding-complete', 'true');
-        localStorage.setItem(
-          'canopy-onboarding',
-          JSON.stringify({ completed: true }),
-        );
-        localStorage.setItem('canopy-display-name', displayName);
-        localStorage.setItem('canopy-default-adapter', selectedAdapter);
-        if (selectedProviderSlug) {
-          localStorage.setItem('canopy-provider-slug', selectedProviderSlug);
-          const key = providerKeys[selectedProviderSlug];
-          if (key) localStorage.setItem(`canopy-provider-${selectedProviderSlug}`, key);
+        // Create a default Organization for the hierarchy system
+        try {
+          const { organizations } = await import('$api/client');
+          const { organizationsStore } = await import('$lib/stores/organizations.svelte');
+          const orgName = workspaceName || 'My Organization';
+          const orgSlug = orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+          const org = await organizations.create({ name: orgName, slug: orgSlug || 'my-organization' });
+          if (org) organizationsStore.setCurrent(org);
+        } catch (e) {
+          console.warn('Org creation skipped:', e);
         }
-        // Clean up registration scratch keys — no longer needed.
-        localStorage.removeItem('canopy-registered-name');
-        localStorage.removeItem('canopy-registered-workspace-id');
-        localStorage.removeItem('canopy-registered-workspace-name');
-      }
 
-      if (isTauri() && selectedProviderSlug) {
-        const { Store } = await import('@tauri-apps/plugin-store');
-        const credStore = await Store.load('credentials.json');
-        await credStore.set('provider', {
-          slug: selectedProviderSlug,
-          apiKey: providerKeys[selectedProviderSlug] ?? '',
-        });
-        await credStore.save();
-      }
+        onboardingStore.complete();
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('canopy-onboarding-complete', 'true');
+          localStorage.setItem('canopy-onboarding', JSON.stringify({ completed: true }));
+          localStorage.setItem('canopy-display-name', displayName);
+          localStorage.setItem('canopy-default-adapter', selectedAdapter);
+          if (selectedProviderSlug) {
+            localStorage.setItem('canopy-provider-slug', selectedProviderSlug);
+            const key = providerKeys[selectedProviderSlug];
+            if (key) localStorage.setItem(`canopy-provider-${selectedProviderSlug}`, key);
+          }
+          localStorage.removeItem('canopy-registered-name');
+          localStorage.removeItem('canopy-registered-workspace-id');
+          localStorage.removeItem('canopy-registered-workspace-name');
+        }
 
-      if (isTauri()) {
-        const { Store } = await import('@tauri-apps/plugin-store');
-        const settStore = await Store.load('settings.json');
-        await settStore.set('default_adapter', selectedAdapter);
-        await settStore.set('miosa_cloud', miosaCloud);
-        await settStore.save();
-      }
+        if (isTauri() && selectedProviderSlug) {
+          try {
+            const { Store } = await import('@tauri-apps/plugin-store');
+            const credStore = await Store.load('credentials.json');
+            await credStore.set('provider', { slug: selectedProviderSlug, apiKey: providerKeys[selectedProviderSlug] ?? '' });
+            await credStore.save();
+          } catch (e) { console.warn('Credential save failed:', e); }
+        }
 
-      goto('/app');
-    } catch (e) {
-      console.error('Launch failed:', e);
-      isLaunching = false;
-    }
+        if (isTauri()) {
+          try {
+            const { Store } = await import('@tauri-apps/plugin-store');
+            const settStore = await Store.load('settings.json');
+            await settStore.set('default_adapter', selectedAdapter);
+            await settStore.set('miosa_cloud', miosaCloud);
+            await settStore.save();
+          } catch (e) { console.warn('Settings save failed:', e); }
+        }
+      } catch (e) {
+        console.error('Launch error (non-fatal, navigating anyway):', e);
+      }
+    })();
+
+    // Race: whichever finishes first (work or 20s deadline) sends us to /app
+    await Promise.race([work, deadline]);
+    goto('/app');
   }
 
   async function skip() {
