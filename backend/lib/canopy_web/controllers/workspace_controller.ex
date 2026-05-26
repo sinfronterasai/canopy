@@ -219,15 +219,19 @@ defmodule CanopyWeb.WorkspaceController do
   # --- Private helpers ---
 
   defp init_canopy_dir(path) when is_binary(path) do
-    canopy = Path.join(path, ".canopy")
-    File.mkdir_p!(Path.join(canopy, "agents"))
-    File.mkdir_p!(Path.join(canopy, "skills"))
-    File.mkdir_p!(Path.join(canopy, "reference"))
+    try do
+      canopy = Path.join(path, ".canopy")
+      File.mkdir_p!(Path.join(canopy, "agents"))
+      File.mkdir_p!(Path.join(canopy, "skills"))
+      File.mkdir_p!(Path.join(canopy, "reference"))
 
-    system_path = Path.join(canopy, "SYSTEM.md")
+      system_path = Path.join(canopy, "SYSTEM.md")
 
-    unless File.exists?(system_path) do
-      File.write!(system_path, "# System\n\nThis is the Canopy workspace system prompt.\n")
+      unless File.exists?(system_path) do
+        File.write!(system_path, "# System\n\nThis is the Canopy workspace system prompt.\n")
+      end
+    rescue
+      _ -> :ok
     end
   end
 
