@@ -181,31 +181,33 @@
       const { workspaceStore, resolveHomePath } = await import('$lib/stores/workspace.svelte');
       const resolvedWorkspacePath = await resolveHomePath(workspacePath);
 
-      if (isTauri() && resolvedWorkspacePath.trim()) {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const agents = TEMPLATE_AGENTS[teamTemplate].map(a => ({
-          id: a.id,
-          name: a.name,
-          emoji: a.emoji,
-          role: a.role,
-          adapter: a.adapter,
-          model: a.model ?? null,
-          skills: a.skills,
-          system_prompt: a.system_prompt ?? null,
-        }));
+      let wsEntry: any = null;
 
-        try {
-          await invoke('scaffold_canopy_dir', {
-            path: resolvedWorkspacePath,
-            name: workspaceName,
-            description: workspaceDesc || null,
-            agents,
-          });
-        } catch (e) {
-          console.warn('Scaffold warning:', e);
+      if (resolvedWorkspacePath.trim()) {
+        if (isTauri()) {
+          const { invoke } = await import('@tauri-apps/api/core');
+          const agents = TEMPLATE_AGENTS[teamTemplate].map(a => ({
+            id: a.id,
+            name: a.name,
+            emoji: a.emoji,
+            role: a.role,
+            adapter: a.adapter,
+            model: a.model ?? null,
+            skills: a.skills,
+            system_prompt: a.system_prompt ?? null,
+          }));
+
+          try {
+            await invoke('scaffold_canopy_dir', {
+              path: resolvedWorkspacePath,
+              name: workspaceName,
+              description: workspaceDesc || null,
+              agents,
+            });
+          } catch (e) {
+            console.warn('Scaffold warning:', e);
+          }
         }
-
-        let wsEntry: any = null;
 
         if (registeredWorkspaceId) {
           wsEntry = {
@@ -240,6 +242,39 @@
             } catch {
               // Non-fatal
             }
+          }
+        }
+
+        // --- Seed Default Template Agents directly to Backend Postgres Database ---
+        const wsId = wsEntry?.id || registeredWorkspaceId;
+        const { isMockEnabled } = await import('$api/client');
+        if (wsId && !isMockEnabled()) {
+          try {
+            const { agents: agentsApi } = await import('$api/client');
+            // Get currently registered backend agents
+            const backendAgents = await agentsApi.list(wsId);
+            const backendIds = new Set(backendAgents.map(a => a.id));
+
+            for (const a of TEMPLATE_AGENTS[teamTemplate]) {
+              if (!backendIds.has(a.id)) {
+                console.log(`Onboarding: Seeding agent ${a.name} to cloud database...`);
+                await agentsApi.create({
+                  id: a.id,
+                  name: a.name,
+                  display_name: a.name,
+                  slug: a.name.toLowerCase().replace(/\s+/g, '-'),
+                  workspace_id: wsId,
+                  avatar_emoji: a.emoji,
+                  role: a.role,
+                  adapter: a.adapter as any,
+                  model: a.model || 'claude-3-5-sonnet-latest',
+                  skills: a.skills,
+                  system_prompt: a.system_prompt || undefined,
+                });
+              }
+            }
+          } catch (e) {
+            console.warn('Backend agent seeding failed:', e);
           }
         }
       }

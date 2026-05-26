@@ -260,6 +260,7 @@ export interface CanopyAgent {
 }
 
 export interface AgentCreateRequest {
+  id?: string;
   name: string;
   display_name: string;
   slug?: string;
