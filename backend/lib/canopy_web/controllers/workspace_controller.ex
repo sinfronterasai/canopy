@@ -66,7 +66,12 @@ defmodule CanopyWeb.WorkspaceController do
 
   def create(conn, params) do
     user = conn.assigns[:current_user]
-    params = Map.put_new(params, "owner_id", user.id)
+    path = params["path"] || params["directory"]
+    params =
+      params
+      |> Map.put("path", path)
+      |> Map.put_new("owner_id", user.id)
+
     changeset = Workspace.changeset(%Workspace{}, params)
 
     case Repo.insert(changeset) do
@@ -112,6 +117,8 @@ defmodule CanopyWeb.WorkspaceController do
         conn |> put_status(404) |> json(%{error: "not_found"})
 
       workspace ->
+        path = params["path"] || params["directory"]
+        params = if path, do: Map.put(params, "path", path), else: params
         changeset = Workspace.changeset(workspace, params)
 
         case Repo.update(changeset) do
