@@ -15,11 +15,11 @@ export default defineConfig({
     },
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:9089",
+        target: "https://canopy-v1nq.onrender.com",
         changeOrigin: true,
       },
       "/stream": {
-        target: "http://127.0.0.1:9089",
+        target: "https://canopy-v1nq.onrender.com",
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on("proxyReq", (proxyReq) => {

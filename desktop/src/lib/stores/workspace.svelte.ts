@@ -103,10 +103,7 @@ class WorkspaceStore {
       this.lastScan = result;
       return result;
     } catch {
-      toastStore.warning(
-        "Workspace scan failed",
-        `.canopy directory not found at ${path}`,
-      );
+      // .canopy directory not found — expected in cloud/web mode, fall through to API
       return null;
     }
   }
