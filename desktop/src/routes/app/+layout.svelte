@@ -72,6 +72,12 @@ import Sidebar from '$lib/components/layout/Sidebar.svelte';
     //    is still null, so every subsequent API request fires without an
     //    Authorization header and receives 401 "unauthorized".
     initializeAuth().then(async () => {
+      // ── Authentication check ──────────────────────────────────────────────
+      if (!isMockEnabled() && !getToken()) {
+        goto('/auth');
+        return;
+      }
+
       // ── Onboarding guard (runs after auth resolves) ───────────────────────
       // If the backend is reachable and the user has a valid token, they
       // already have a running setup — skip onboarding entirely.
