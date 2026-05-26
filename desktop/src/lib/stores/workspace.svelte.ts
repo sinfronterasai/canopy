@@ -22,7 +22,7 @@ function parseSystemMdDescription(content: string): string | undefined {
 }
 
 /** Resolve ~ to actual home directory path */
-async function resolveHomePath(p: string): Promise<string> {
+export async function resolveHomePath(p: string): Promise<string> {
   if (!p.startsWith("~")) return p;
   if (isTauri()) {
     try {
@@ -292,13 +292,15 @@ class WorkspaceStore {
       // Register any backend workspaces not yet in local store
       for (const bws of backendWorkspaces) {
         if (!this.workspaces.some((w) => w.id === bws.id)) {
+          const rawPath =
+            bws.path ??
+            bws.directory ??
+            `~/.canopy/${bws.name.toLowerCase().replace(/\s+/g, "-")}`;
+          const resolvedPath = await resolveHomePath(rawPath);
           const localWs: LocalWorkspace = {
             id: bws.id,
             name: bws.name,
-            path:
-              bws.path ??
-              bws.directory ??
-              `~/.canopy/${bws.name.toLowerCase().replace(/\s+/g, "-")}`,
+            path: resolvedPath,
             addedAt: bws.created_at ?? new Date().toISOString(),
           };
           this.workspaces = [...this.workspaces, localWs];

@@ -178,7 +178,10 @@
     syncToStore();
 
     try {
-      if (isTauri() && workspacePath.trim()) {
+      const { workspaceStore, resolveHomePath } = await import('$lib/stores/workspace.svelte');
+      const resolvedWorkspacePath = await resolveHomePath(workspacePath);
+
+      if (isTauri() && resolvedWorkspacePath.trim()) {
         const { invoke } = await import('@tauri-apps/api/core');
         const agents = TEMPLATE_AGENTS[teamTemplate].map(a => ({
           id: a.id,
@@ -193,7 +196,7 @@
 
         try {
           await invoke('scaffold_canopy_dir', {
-            path: workspacePath,
+            path: resolvedWorkspacePath,
             name: workspaceName,
             description: workspaceDesc || null,
             agents,
@@ -202,14 +205,12 @@
           console.warn('Scaffold warning:', e);
         }
 
-        const { workspaceStore } = await import('$lib/stores/workspace.svelte');
-
         let wsEntry: any = null;
 
         if (registeredWorkspaceId) {
           wsEntry = {
             id: registeredWorkspaceId,
-            path: workspacePath,
+            path: resolvedWorkspacePath,
             name: workspaceName,
             description: workspaceDesc,
             addedAt: new Date().toISOString(),
@@ -221,14 +222,14 @@
             const { workspaces } = await import('$api/client');
             await workspaces.update(registeredWorkspaceId, {
               name: workspaceName,
-              path: workspacePath,
+              path: resolvedWorkspacePath,
               description: workspaceDesc || undefined,
             });
           } catch {
             // Non-fatal
           }
         } else {
-          wsEntry = await workspaceStore.createWorkspace(workspaceName, workspacePath);
+          wsEntry = await workspaceStore.createWorkspace(workspaceName, resolvedWorkspacePath);
           if (wsEntry) {
             await workspaceStore.setActiveWorkspace(wsEntry.id);
             try {
