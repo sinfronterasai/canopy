@@ -18,7 +18,7 @@
   }
 
   function gatewayToDot(status: GatewayStatus): 'online' | 'busy' | 'error' {
-    if (status === 'healthy')  return 'online';
+    if (status === 'healthy' || status === 'ok')  return 'online';
     if (status === 'degraded') return 'busy';
     return 'error';
   }

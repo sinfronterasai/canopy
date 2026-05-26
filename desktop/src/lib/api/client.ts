@@ -56,6 +56,7 @@ import type {
   Team,
   TeamMembership,
   HierarchyTree,
+  HierarchyDivisionNode,
   Label,
   LabelCreateRequest,
   Plugin,
@@ -1448,6 +1449,7 @@ export const workspaces = {
   create: async (params: {
     name: string;
     directory?: string;
+    path?: string;
   }): Promise<Workspace> => {
     return request<Workspace>("/workspaces", {
       method: "POST",
@@ -1666,17 +1668,35 @@ export const organizations = {
     );
     return data.organizations ?? [];
   },
-  get: (id: string) => request<Organization>(`/organizations/${id}`),
-  create: (body: OrganizationCreateRequest) =>
-    request<Organization>("/organizations", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-  update: (id: string, body: Partial<OrganizationCreateRequest>) =>
-    request<Organization>(`/organizations/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(body),
-    }),
+  get: async (id: string): Promise<Organization> => {
+    const data = await request<{ organization: Organization }>(
+      `/organizations/${id}`,
+    );
+    return data.organization;
+  },
+  create: async (body: OrganizationCreateRequest): Promise<Organization> => {
+    const data = await request<{ organization: Organization }>(
+      "/organizations",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    );
+    return data.organization;
+  },
+  update: async (
+    id: string,
+    body: Partial<OrganizationCreateRequest>,
+  ): Promise<Organization> => {
+    const data = await request<{ organization: Organization }>(
+      `/organizations/${id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      },
+    );
+    return data.organization;
+  },
   delete: (id: string) =>
     request<void>(`/organizations/${id}`, { method: "DELETE" }),
   members: async (id: string): Promise<OrganizationMembership[]> => {
@@ -1695,17 +1715,24 @@ export const divisions = {
     const data = await request<{ divisions: Division[] }>(`/divisions${qs}`);
     return data.divisions ?? [];
   },
-  get: (id: string) => request<Division>(`/divisions/${id}`),
-  create: (body: Partial<Division>) =>
-    request<Division>("/divisions", {
+  get: async (id: string): Promise<Division> => {
+    const data = await request<{ division: Division }>(`/divisions/${id}`);
+    return data.division;
+  },
+  create: async (body: Partial<Division>): Promise<Division> => {
+    const data = await request<{ division: Division }>("/divisions", {
       method: "POST",
       body: JSON.stringify(body),
-    }),
-  update: (id: string, body: Partial<Division>) =>
-    request<Division>(`/divisions/${id}`, {
+    });
+    return data.division;
+  },
+  update: async (id: string, body: Partial<Division>): Promise<Division> => {
+    const data = await request<{ division: Division }>(`/divisions/${id}`, {
       method: "PATCH",
       body: JSON.stringify(body),
-    }),
+    });
+    return data.division;
+  },
   delete: (id: string) =>
     request<void>(`/divisions/${id}`, { method: "DELETE" }),
   departments: async (divisionId: string): Promise<Department[]> => {
@@ -1726,17 +1753,24 @@ export const departments = {
     );
     return data.departments ?? [];
   },
-  get: (id: string) => request<Department>(`/departments/${id}`),
-  create: (body: Partial<Department>) =>
-    request<Department>("/departments", {
+  get: async (id: string): Promise<Department> => {
+    const data = await request<{ department: Department }>(`/departments/${id}`);
+    return data.department;
+  },
+  create: async (body: Partial<Department>): Promise<Department> => {
+    const data = await request<{ department: Department }>("/departments", {
       method: "POST",
       body: JSON.stringify(body),
-    }),
-  update: (id: string, body: Partial<Department>) =>
-    request<Department>(`/departments/${id}`, {
+    });
+    return data.department;
+  },
+  update: async (id: string, body: Partial<Department>): Promise<Department> => {
+    const data = await request<{ department: Department }>(`/departments/${id}`, {
       method: "PATCH",
       body: JSON.stringify(body),
-    }),
+    });
+    return data.department;
+  },
   delete: (id: string) =>
     request<void>(`/departments/${id}`, { method: "DELETE" }),
   teams: async (departmentId: string): Promise<Team[]> => {
@@ -1755,17 +1789,24 @@ export const teams = {
     const data = await request<{ teams: Team[] }>(`/teams${qs}`);
     return data.teams ?? [];
   },
-  get: (id: string) => request<Team>(`/teams/${id}`),
-  create: (body: Partial<Team>) =>
-    request<Team>("/teams", {
+  get: async (id: string): Promise<Team> => {
+    const data = await request<{ team: Team }>(`/teams/${id}`);
+    return data.team;
+  },
+  create: async (body: Partial<Team>): Promise<Team> => {
+    const data = await request<{ team: Team }>("/teams", {
       method: "POST",
       body: JSON.stringify(body),
-    }),
-  update: (id: string, body: Partial<Team>) =>
-    request<Team>(`/teams/${id}`, {
+    });
+    return data.team;
+  },
+  update: async (id: string, body: Partial<Team>): Promise<Team> => {
+    const data = await request<{ team: Team }>(`/teams/${id}`, {
       method: "PATCH",
       body: JSON.stringify(body),
-    }),
+    });
+    return data.team;
+  },
   delete: (id: string) => request<void>(`/teams/${id}`, { method: "DELETE" }),
   agents: async (teamId: string): Promise<CanopyAgent[]> => {
     const data = await request<{ agents: CanopyAgent[] }>(
@@ -1789,8 +1830,16 @@ export const teams = {
 // ── Hierarchy ─────────────────────────────────────────────────────────────────
 
 export const hierarchy = {
-  get: (organizationId: string) =>
-    request<HierarchyTree>(`/hierarchy?organization_id=${organizationId}`),
+  get: async (organizationId: string): Promise<HierarchyTree> => {
+    const data = await request<{
+      organization: Organization & { divisions: HierarchyDivisionNode[] };
+    }>(`/hierarchy?organization_id=${organizationId}`);
+
+    return {
+      organization: data.organization,
+      divisions: data.organization?.divisions ?? [],
+    };
+  },
 };
 
 // ── Labels ────────────────────────────────────────────────────────────────────
