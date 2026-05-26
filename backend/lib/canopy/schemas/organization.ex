@@ -28,7 +28,7 @@ defmodule Canopy.Schemas.Organization do
   end
 
   def changeset(organization, attrs) do
-    attrs = maybe_generate_slug(attrs)
+    attrs = maybe_generate_slug(organization, attrs)
 
     organization
     |> cast(attrs, [
@@ -51,23 +51,39 @@ defmodule Canopy.Schemas.Organization do
     |> unique_constraint(:slug)
   end
 
-  defp maybe_generate_slug(attrs) do
-    case attrs do
-      %{"name" => name, "slug" => slug} when is_binary(name) and (is_nil(slug) or slug == "") ->
-        Map.put(attrs, "slug", slugify(name))
+  defp maybe_generate_slug(organization, attrs) do
+    # Only append unique suffix for new organizations (where slug is nil)
+    if is_nil(organization.slug) do
+      case attrs do
+        %{"name" => name, "slug" => slug} when is_binary(name) and (is_nil(slug) or slug == "") ->
+          Map.put(attrs, "slug", append_unique_suffix(slugify(name)))
 
-      %{"name" => name} = map when is_binary(name) ->
-        Map.put_new(map, "slug", slugify(name))
+        %{"name" => name} = map when is_binary(name) ->
+          Map.put_new(map, "slug", append_unique_suffix(slugify(name)))
 
-      %{name: name, slug: slug} when is_binary(name) and (is_nil(slug) or slug == "") ->
-        Map.put(attrs, :slug, slugify(name))
+        %{"slug" => slug} when is_binary(slug) and slug != "" ->
+          Map.put(attrs, "slug", append_unique_suffix(slugify(slug)))
 
-      %{name: name} = map when is_binary(name) ->
-        Map.put_new(map, :slug, slugify(name))
+        %{name: name, slug: slug} when is_binary(name) and (is_nil(slug) or slug == "") ->
+          Map.put(attrs, :slug, append_unique_suffix(slugify(name)))
 
-      _ ->
-        attrs
+        %{name: name} = map when is_binary(name) ->
+          Map.put_new(map, :slug, append_unique_suffix(slugify(name)))
+
+        %{slug: slug} when is_binary(slug) and slug != "" ->
+          Map.put(attrs, :slug, append_unique_suffix(slugify(slug)))
+
+        _ ->
+          attrs
+      end
+    else
+      attrs
     end
+  end
+
+  defp append_unique_suffix(slug) do
+    suffix = :crypto.strong_rand_bytes(3) |> Base.encode16(case: :lower)
+    "#{slug}-#{suffix}"
   end
 
   defp slugify(name) do
