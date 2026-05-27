@@ -139,7 +139,6 @@ defmodule CanopyWeb.Router do
       get "/goals", ProjectController, :goals, as: :goals
       get "/workspaces", ProjectController, :workspaces, as: :workspaces
     end
-    patch "/projects/:id", ProjectController, :patch
 
     # Documents
     get "/documents", DocumentController, :index
