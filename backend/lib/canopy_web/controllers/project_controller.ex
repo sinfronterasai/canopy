@@ -16,14 +16,13 @@ defmodule CanopyWeb.ProjectController do
         else: query
 
     projects = Repo.all(query)
-
-    # Fetch counts for all projects in one query each
     project_ids = Enum.map(projects, & &1.id)
 
-    goal_counts =
-      if project_ids == [],
-        do: %{},
-        else:
+    {goal_counts, issue_counts} =
+      if project_ids == [] do
+        {%{}, %{}}
+      else
+        gc =
           Repo.all(
             from g in Canopy.Schemas.Goal,
               where: g.project_id in ^project_ids,
@@ -32,10 +31,7 @@ defmodule CanopyWeb.ProjectController do
           )
           |> Map.new()
 
-    issue_counts =
-      if project_ids == [],
-        do: %{},
-        else:
+        ic =
           Repo.all(
             from i in Canopy.Schemas.Issue,
               where: i.project_id in ^project_ids,
@@ -43,6 +39,9 @@ defmodule CanopyWeb.ProjectController do
               select: {i.project_id, count(i.id)}
           )
           |> Map.new()
+
+        {gc, ic}
+      end
 
     json(conn, %{
       projects:
@@ -75,8 +74,11 @@ defmodule CanopyWeb.ProjectController do
         conn |> put_status(404) |> json(%{error: "not_found"})
 
       project ->
-        goal_count = Repo.aggregate(from(g in Canopy.Schemas.Goal, where: g.project_id == ^id), :count)
-        issue_count = Repo.aggregate(from(i in Canopy.Schemas.Issue, where: i.project_id == ^id), :count)
+        goal_count =
+          Repo.aggregate(from(g in Canopy.Schemas.Goal, where: g.project_id == ^id), :count)
+
+        issue_count =
+          Repo.aggregate(from(i in Canopy.Schemas.Issue, where: i.project_id == ^id), :count)
 
         json(conn, %{
           project: serialize(project, goal_count: goal_count, issue_count: issue_count)
@@ -84,7 +86,7 @@ defmodule CanopyWeb.ProjectController do
     end
   end
 
-  # PATCH is sent by the frontend; forward to update/2
+  # PATCH is sent by the frontend; Phoenix resources only generates PUT
   def patch(conn, params), do: update(conn, params)
 
   def update(conn, %{"id" => id} = params) do
@@ -126,14 +128,13 @@ defmodule CanopyWeb.ProjectController do
           order_by: [asc: g.title]
       )
 
-    # Build issue counts per goal
     goal_ids = Enum.map(goals, & &1.id)
 
     issue_counts =
       if goal_ids == [] do
         %{}
       else
-        Canopy.Repo.all(
+        Repo.all(
           from i in Canopy.Schemas.Issue,
             where: i.goal_id in ^goal_ids,
             group_by: i.goal_id,
@@ -142,9 +143,9 @@ defmodule CanopyWeb.ProjectController do
         |> Map.new()
       end
 
-    serialized = Enum.map(goals, &serialize_goal(&1, Map.get(issue_counts, &1.id, 0)))
+    serialized = Enum.map(goals, fn g -> serialize_goal(g, Map.get(issue_counts, g.id, 0)) end)
 
-    # Assemble flat list into parent→children tree
+    # Assemble flat list into parent->children tree
     by_id = Map.new(serialized, fn g -> {g.id, Map.put(g, :children, [])} end)
 
     tree =
@@ -167,7 +168,6 @@ defmodule CanopyWeb.ProjectController do
   end
 
   def workspaces(conn, %{"project_id" => _project_id}) do
-    # Projects are workspace-scoped; the parent workspace is accessible via the project record
     json(conn, %{workspaces: []})
   end
 
@@ -191,16 +191,17 @@ defmodule CanopyWeb.ProjectController do
   end
 
   defp serialize_goal(%Goal{} = g, issue_count \\ 0) do
+    g_map = Map.from_struct(g)
     %{
       id: g.id,
       title: g.title,
       description: g.description,
       status: g.status,
-      priority: Map.get(g, :priority, "medium"),
-      progress: Map.get(g, :progress, 0),
-      assignee_id: Map.get(g, :assignee_id, nil),
+      priority: Map.get(g_map, :priority, "medium"),
+      progress: Map.get(g_map, :progress, 0),
+      assignee_id: Map.get(g_map, :assignee_id, nil),
       project_id: g.project_id,
-      workspace_id: Map.get(g, :workspace_id, nil),
+      workspace_id: g.workspace_id,
       parent_id: g.parent_id,
       issue_count: issue_count,
       children: [],
