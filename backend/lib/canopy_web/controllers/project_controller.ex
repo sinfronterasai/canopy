@@ -49,7 +49,7 @@ defmodule CanopyWeb.ProjectController do
     end
   end
 
-  def patch(conn, params), do: update(conn, params)
+
 
   def update(conn, %{"id" => id} = params) do
     case Repo.get(Project, id) do
