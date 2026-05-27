@@ -18,8 +18,8 @@ defmodule CanopyWeb.ProjectController do
     projects = Repo.all(query)
     project_ids = Enum.map(projects, & &1.id)
 
-    goal_counts = bulk_count(Goal, :project_id, project_ids)
-    issue_counts = bulk_count(Issue, :project_id, project_ids)
+    goal_counts = goal_counts(project_ids)
+    issue_counts = issue_counts_by_project(project_ids)
 
     json(conn, %{
       projects:
@@ -93,7 +93,7 @@ defmodule CanopyWeb.ProjectController do
     flat_goals = Repo.all(from(g in Goal, where: g.project_id == ^project_id, order_by: [asc: g.title]))
     goal_ids = Enum.map(flat_goals, & &1.id)
 
-    issue_counts = bulk_count(Issue, :goal_id, goal_ids)
+    issue_counts = issue_counts_by_goal(goal_ids)
 
     serialized = Enum.map(flat_goals, fn g ->
       serialize_goal(g, Map.get(issue_counts, g.id, 0))
@@ -109,15 +109,37 @@ defmodule CanopyWeb.ProjectController do
 
   # --- Private helpers ---
 
-  # Bulk count helper: returns %{id => count} map for a list of parent IDs
-  defp bulk_count(_schema, _field, []), do: %{}
-
-  defp bulk_count(schema, field, ids) do
+  defp goal_counts([]), do: %{}
+  defp goal_counts(project_ids) do
     Repo.all(
-      from(r in schema,
-        where: field(r, ^field) in ^ids,
-        group_by: field(r, ^field),
-        select: {field(r, ^field), count(r.id)}
+      from(g in Goal,
+        where: g.project_id in ^project_ids,
+        group_by: g.project_id,
+        select: {g.project_id, count(g.id)}
+      )
+    )
+    |> Map.new()
+  end
+
+  defp issue_counts_by_project([]), do: %{}
+  defp issue_counts_by_project(project_ids) do
+    Repo.all(
+      from(i in Issue,
+        where: i.project_id in ^project_ids,
+        group_by: i.project_id,
+        select: {i.project_id, count(i.id)}
+      )
+    )
+    |> Map.new()
+  end
+
+  defp issue_counts_by_goal([]), do: %{}
+  defp issue_counts_by_goal(goal_ids) do
+    Repo.all(
+      from(i in Issue,
+        where: i.goal_id in ^goal_ids,
+        group_by: i.goal_id,
+        select: {i.goal_id, count(i.id)}
       )
     )
     |> Map.new()
