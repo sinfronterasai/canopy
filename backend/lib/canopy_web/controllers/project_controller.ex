@@ -16,7 +16,43 @@ defmodule CanopyWeb.ProjectController do
         else: query
 
     projects = Repo.all(query)
-    json(conn, %{projects: Enum.map(projects, &serialize/1)})
+
+    # Fetch counts for all projects in one query each
+    project_ids = Enum.map(projects, & &1.id)
+
+    goal_counts =
+      if project_ids == [],
+        do: %{},
+        else:
+          Repo.all(
+            from g in Canopy.Schemas.Goal,
+              where: g.project_id in ^project_ids,
+              group_by: g.project_id,
+              select: {g.project_id, count(g.id)}
+          )
+          |> Map.new()
+
+    issue_counts =
+      if project_ids == [],
+        do: %{},
+        else:
+          Repo.all(
+            from i in Canopy.Schemas.Issue,
+              where: i.project_id in ^project_ids,
+              group_by: i.project_id,
+              select: {i.project_id, count(i.id)}
+          )
+          |> Map.new()
+
+    json(conn, %{
+      projects:
+        Enum.map(projects, fn p ->
+          serialize(p,
+            goal_count: Map.get(goal_counts, p.id, 0),
+            issue_count: Map.get(issue_counts, p.id, 0)
+          )
+        end)
+    })
   end
 
   def create(conn, params) do
@@ -34,20 +70,22 @@ defmodule CanopyWeb.ProjectController do
   end
 
   def show(conn, %{"id" => id}) do
-    case Repo.get(Project, id) |> Repo.preload(:goals) do
+    case Repo.get(Project, id) do
       nil ->
         conn |> put_status(404) |> json(%{error: "not_found"})
 
       project ->
-        goal_count = length(project.goals)
+        goal_count = Repo.aggregate(from(g in Canopy.Schemas.Goal, where: g.project_id == ^id), :count)
+        issue_count = Repo.aggregate(from(i in Canopy.Schemas.Issue, where: i.project_id == ^id), :count)
 
         json(conn, %{
-          project:
-            serialize(project)
-            |> Map.put(:goal_count, goal_count)
+          project: serialize(project, goal_count: goal_count, issue_count: issue_count)
         })
     end
   end
+
+  # PATCH is sent by the frontend; forward to update/2
+  def patch(conn, params), do: update(conn, params)
 
   def update(conn, %{"id" => id} = params) do
     case Repo.get(Project, id) do
@@ -135,13 +173,18 @@ defmodule CanopyWeb.ProjectController do
 
   # --- Private helpers ---
 
-  defp serialize(%Project{} = p) do
+  defp serialize(%Project{} = p, opts \\ []) do
     %{
       id: p.id,
       name: p.name,
       description: p.description,
       status: p.status,
       workspace_id: p.workspace_id,
+      workspace_path: nil,
+      goal_count: Keyword.get(opts, :goal_count, 0),
+      issue_count: Keyword.get(opts, :issue_count, 0),
+      agent_count: 0,
+      created_at: p.inserted_at,
       inserted_at: p.inserted_at,
       updated_at: p.updated_at
     }
