@@ -1120,7 +1120,24 @@ export const goals = {
     const data = await request<{ goals: GoalTreeNode[] }>(
       `/projects/${projectId}/goals`,
     );
-    return data.goals ?? [];
+    const flat = data.goals ?? [];
+    // If the backend already built the tree (roots have children), return as-is.
+    // Otherwise assemble from parent_id relationships as a client-side fallback.
+    const hasTree = flat.some(g => g.children && g.children.length > 0);
+    if (hasTree || flat.every(g => g.parent_id === null || g.parent_id === undefined)) {
+      return flat;
+    }
+    const byId = new Map(flat.map(g => [g.id, { ...g, children: [] as GoalTreeNode[] }]));
+    const roots: GoalTreeNode[] = [];
+    for (const g of flat) {
+      const node = byId.get(g.id)!;
+      if (g.parent_id && byId.has(g.parent_id)) {
+        byId.get(g.parent_id)!.children.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+    return roots;
   },
   get: (id: string) => request<{ goal: Goal }>(`/goals/${id}`),
   create: (projectId: string, body: Partial<Goal>) =>

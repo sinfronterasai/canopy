@@ -88,7 +88,44 @@ defmodule CanopyWeb.ProjectController do
           order_by: [asc: g.title]
       )
 
-    json(conn, %{goals: Enum.map(goals, &serialize_goal/1)})
+    # Build issue counts per goal
+    goal_ids = Enum.map(goals, & &1.id)
+
+    issue_counts =
+      if goal_ids == [] do
+        %{}
+      else
+        Canopy.Repo.all(
+          from i in Canopy.Schemas.Issue,
+            where: i.goal_id in ^goal_ids,
+            group_by: i.goal_id,
+            select: {i.goal_id, count(i.id)}
+        )
+        |> Map.new()
+      end
+
+    serialized = Enum.map(goals, &serialize_goal(&1, Map.get(issue_counts, &1.id, 0)))
+
+    # Assemble flat list into parent→children tree
+    by_id = Map.new(serialized, fn g -> {g.id, Map.put(g, :children, [])} end)
+
+    tree =
+      Enum.reduce(serialized, by_id, fn g, acc ->
+        if g.parent_id && Map.has_key?(acc, g.parent_id) do
+          Map.update!(acc, g.parent_id, fn parent ->
+            Map.update(parent, :children, [acc[g.id]], fn ch -> ch ++ [acc[g.id]] end)
+          end)
+        else
+          acc
+        end
+      end)
+
+    roots =
+      serialized
+      |> Enum.filter(fn g -> is_nil(g.parent_id) end)
+      |> Enum.map(fn g -> tree[g.id] end)
+
+    json(conn, %{goals: roots})
   end
 
   def workspaces(conn, %{"project_id" => _project_id}) do
@@ -110,14 +147,21 @@ defmodule CanopyWeb.ProjectController do
     }
   end
 
-  defp serialize_goal(%Goal{} = g) do
+  defp serialize_goal(%Goal{} = g, issue_count \\ 0) do
     %{
       id: g.id,
       title: g.title,
       description: g.description,
       status: g.status,
+      priority: Map.get(g, :priority, "medium"),
+      progress: Map.get(g, :progress, 0),
+      assignee_id: Map.get(g, :assignee_id, nil),
       project_id: g.project_id,
+      workspace_id: Map.get(g, :workspace_id, nil),
       parent_id: g.parent_id,
+      issue_count: issue_count,
+      children: [],
+      created_at: g.inserted_at,
       inserted_at: g.inserted_at,
       updated_at: g.updated_at
     }
